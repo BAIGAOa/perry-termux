@@ -6,7 +6,7 @@
 #   bin/perry.real   the upstream static musl aarch64 compiler
 #   bin/perry        launcher (from src/perry)
 #   bin/cc           musl link shim (from src/cc)
-#   lib/*.a          Perry's runtime archives, decompressed
+#   lib/*.a.zst      Perry's runtime archives, still compressed
 #   lib/libperry_ext_http_stubs.a   symbols upstream does not ship for musl
 #   musl-sysroot/    Alpine musl libc, crt objects and static libs
 #
@@ -49,8 +49,8 @@ for arg in "$@"; do
 done
 
 [ "$(uname -m)" = "aarch64" ] || die "aarch64 only (this host is $(uname -m))"
-for tool in clang ld.lld zstd curl tar ar; do
-  command -v "$tool" >/dev/null 2>&1 || die "missing '$tool' — pkg install clang lld zstd binutils"
+for tool in clang ld.lld curl tar ar; do
+  command -v "$tool" >/dev/null 2>&1 || die "missing '$tool' — pkg install clang lld binutils"
 done
 
 if [ "$clean" = 1 ]; then
@@ -109,12 +109,14 @@ tar xzf "$work/perry.tgz" -C "$work/pkg"
 
 install -m755 "$work/pkg/package/bin/perry" "$root/bin/perry.real"
 for lib in libperry_runtime libperry_runtime_abort libperry_stdlib; do
-  # Decompressed here rather than left as .a.zst: Perry would otherwise unpack
-  # them into ~/.cache on first use, which is the same bytes on disk but
-  # somewhere less obvious.
-  zstd -d -q -f -o "$root/lib/$lib.a" "$work/pkg/package/lib/$lib.a.zst" \
+  # Copied still zstd-compressed. Perry decompresses .a.zst transparently when
+  # it resolves a runtime archive — including through PERRY_RUNTIME_DIR — into
+  # ~/.cache/perry/libs, so the 177 MB of archives do not belong in the
+  # download or in git when 31 MB of them decompress to the same bytes on
+  # first compile.
+  cp "$work/pkg/package/lib/$lib.a.zst" "$root/lib/" \
     || die "missing bundled archive: $lib.a.zst"
-  note "lib/$lib.a"
+  note "lib/$lib.a.zst"
 done
 
 if [ "$fetch_only" = 1 ]; then

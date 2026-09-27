@@ -37,8 +37,8 @@ cd perry-termux
 bash install.sh
 ```
 
-`pkg install clang lld zstd binutils` is required for the build and for
-compiling; `curl` for the download.
+`pkg install clang lld binutils` is required for the build and for compiling;
+`curl` for the download.
 
 `install.sh` only creates the symlink `$PREFIX/bin/perry`. The package is
 relocatable — the launcher finds the rest relative to itself, so it can live
@@ -63,9 +63,14 @@ environment:
 | `bin/perry.real` | Upstream static musl aarch64 compiler, unmodified |
 | `bin/perry` | Launcher — puts `bin/` first on `PATH`, ensures `TMPDIR` exists |
 | `bin/cc` | Link shim that points clang at the musl sysroot instead of bionic |
-| `lib/*.a` | Perry's runtime archives, pre-decompressed |
+| `lib/*.a.zst` | Perry's runtime archives, zstd-compressed |
 | `lib/libperry_ext_http_stubs.a` | Symbols upstream does not ship for musl (see below) |
 | `musl-sysroot/` | Alpine musl libc, crt objects, and static OpenSSL/zlib/zstd |
+
+The first `perry compile` unpacks the runtime archives to
+`~/.cache/perry/libs/` (~180 MB, once). Perry resolves `.a.zst` transparently
+through `PERRY_RUNTIME_DIR`, and shipping them compressed is what keeps the
+download at ~85 MB instead of ~230 MB.
 
 Two details are load-bearing:
 
