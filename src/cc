@@ -1,0 +1,52 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# musl aarch64 C compiler shim for Perry on Termux.
+#
+# Perry's runtime archives (libperry_*.a) are built against musl, while
+# Termux's own `cc` targets bionic. Linking the two fails on musl-only
+# symbols (bcmp, __errno_location, __xpg_strerror_r, the _Unwind_* family).
+# This shim points clang at an Alpine musl sysroot instead, and forces a
+# fully static link: Termux has no /lib/ld-musl-aarch64.so.1, so a
+# dynamically linked musl binary would not start.
+#
+# Installed as `cc` inside the package's private bin/ directory, which the
+# `perry` launcher prepends to PATH. It is deliberately not installed
+# globally — that would shadow Termux's real compiler.
+set -euo pipefail
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+root="$(dirname "$here")"
+sysroot="$root/musl-sysroot"
+# Alpine's gcc support files live under a version-stamped directory. Glob it so
+# a sysroot rebuilt against a newer gcc needs no edit here.
+gccdir=""
+for d in "$sysroot"/usr/lib/gcc/*/*/; do
+  [ -e "$d/crtbeginT.o" ] && gccdir="${d%/}"
+done
+if [ -z "$gccdir" ]; then
+  echo "cc: no gcc support files under $sysroot/usr/lib/gcc — run build.sh first" >&2
+  exit 1
+fi
+
+args=()
+linking=1
+for arg in "$@"; do
+  # ld.lld accepts this; passing it through as a bare driver argument does
+  # not survive some linkers, and the musl link does not need it.
+  if [ "$arg" = "-Wl,--allow-multiple-definition" ]; then
+    continue
+  fi
+  case "$arg" in
+    -c|-E|-S|-M|-MM) linking=0 ;;
+  esac
+  args+=("$arg")
+done
+
+# Stubs for the perry-ext-http archive upstream does not ship for musl. Added
+# last so the linker only pulls them if something still has them undefined.
+# See src/ext_http_stubs.c.
+stubs=()
+if [ "$linking" = 1 ]; then
+  stubs=("$root/lib/libperry_ext_http_stubs.a")
+fi
+
+exec clang -target aarch64-unknown-linux-musl -fuse-ld=lld -static \
+  --sysroot="$sysroot" -B"$gccdir" -L"$gccdir" "${args[@]}" "${stubs[@]}"

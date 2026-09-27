@@ -1,0 +1,26 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Perry launcher for Termux.
+#
+# Exists only to put this package's `bin/` first on PATH, so the `cc` shim
+# next to it is what Perry's linker step finds instead of Termux's bionic
+# clang. The real compiler is perry.real in the same directory.
+set -euo pipefail
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+root="$(dirname "$here")"
+
+export PERRY_TERMUX_ROOT="$root"
+export PERRY_RUNTIME_DIR="$root/lib"
+export PATH="$here:$PATH"
+
+# Perry's LLVM backend writes temporary .ll files through std::env::temp_dir(),
+# which falls back to /tmp when TMPDIR is unset. Android has no writable /tmp,
+# so the codegen step fails with "Failed to create temp .ll file". A normal
+# Termux login shell sets TMPDIR, but anything invoking perry from a stripped
+# environment (cron, an app launcher, `env -i`) does not.
+if [ -z "${TMPDIR:-}" ] || [ ! -d "${TMPDIR:-}" ]; then
+  TMPDIR="${PREFIX:-$HOME}/tmp"
+  mkdir -p "$TMPDIR"
+fi
+export TMPDIR
+
+exec "$here/perry.real" "$@"
