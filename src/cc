@@ -29,11 +29,6 @@ fi
 args=()
 linking=1
 for arg in "$@"; do
-  # ld.lld accepts this; passing it through as a bare driver argument does
-  # not survive some linkers, and the musl link does not need it.
-  if [ "$arg" = "-Wl,--allow-multiple-definition" ]; then
-    continue
-  fi
   case "$arg" in
     -c|-E|-S|-M|-MM) linking=0 ;;
   esac
